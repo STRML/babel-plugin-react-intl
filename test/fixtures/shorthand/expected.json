@@ -1,0 +1,12 @@
+[
+  {
+    "id": "Hello World!",
+    "description": "Shorthand Message in File: test/fixtures/shorthand/actual.js",
+    "defaultMessage": "Hello World!"
+  },
+  {
+    "id": "Another message",
+    "description": "Shorthand Message in File: test/fixtures/shorthand/actual.js",
+    "defaultMessage": "Another message"
+  }
+]

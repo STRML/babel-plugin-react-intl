@@ -13,15 +13,15 @@ const ESCAPED_CHARS = {
     '}'  : '\\}',
 };
 
-const ESAPE_CHARS_REGEXP = /\\#|[{}\\]/g;
+const ESCAPE_CHARS_REGEXP = /\\#|[{}\\]/g;
 
 export default function (message) {
-    let ast = parse(message);
+    const ast = parse(message);
     return printICUMessage(ast);
 }
 
 function printICUMessage(ast) {
-    let printedNodes = ast.elements.map((node) => {
+    const printedNodes = ast.elements.map((node) => {
         if (node.type === 'messageTextElement') {
             return printMessageTextASTNode(node);
         }
@@ -46,9 +46,7 @@ function printICUMessage(ast) {
     return printedNodes.join('');
 }
 
-function getArgumentType(format) {
-    const {type, ordinal} = format;
-
+function getArgumentType({type, ordinal}) {
     // Special-case ordinal plurals to use `selectordinal` instead of `plural`.
     if (type === 'pluralFormat' && ordinal) {
         return 'selectordinal';
@@ -58,22 +56,22 @@ function getArgumentType(format) {
 }
 
 function printMessageTextASTNode({value}) {
-    return value.replace(ESAPE_CHARS_REGEXP, (char) => ESCAPED_CHARS[char]);
+    return value.replace(ESCAPE_CHARS_REGEXP, (char) => ESCAPED_CHARS[char]);
 }
 
 function printSimpleFormatASTNode({id, format}) {
-    let argumentType = getArgumentType(format);
-    let style = format.style ? `, ${format.style}` : '';
+    const argumentType = getArgumentType(format);
+    const style = format.style ? `, ${format.style}` : '';
 
     return `{${id}, ${argumentType}${style}}`;
 }
 
 function printOptionalFormatASTNode({id, format}) {
-    let argumentType = getArgumentType(format);
-    let offset = format.offset ? `, offset:${format.offset}` : '';
+    const argumentType = getArgumentType(format);
+    const offset = format.offset ? `, offset:${format.offset}` : '';
 
-    let options = format.options.map((option) => {
-        let optionValue = printICUMessage(option.value);
+    const options = format.options.map((option) => {
+        const optionValue = printICUMessage(option.value);
         return ` ${option.selector} {${optionValue}}`;
     });
 

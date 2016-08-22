@@ -18,15 +18,21 @@ const FUNCTION_NAMES = [
     'defineMessages',
 ];
 
+const BARE_FUNCTION_NAMES = [
+    '__',
+];
+
 const DESCRIPTOR_PROPS = new Set(['id', 'description', 'defaultMessage']);
 
-export default function () {
+export default function (babel) {
     function getModuleSourceName(opts) {
         return opts.moduleSourceName || 'react-intl';
     }
 
+    // Get the value of a node at a path. For this plugin to work, the value must be
+    // statically evaluated.
     function evaluatePath(path) {
-        let evaluated = path.evaluate();
+        const evaluated = path.evaluate();
         if (evaluated.confident) {
             return evaluated.value;
         }
@@ -54,7 +60,7 @@ export default function () {
     }
 
     function getICUMessageValue(messagePath, {isJSXSource = false} = {}) {
-        let message = getMessageDescriptorValue(messagePath);
+        const message = getMessageDescriptorValue(messagePath);
 
         try {
             return printICUMessage(message);
@@ -80,9 +86,11 @@ export default function () {
         }
     }
 
+    // Given an array of the shape [[key, value], [key, value], ...],
+    // zip the keys and values into an object if they keys are valid descriptor props.
     function createMessageDescriptor(propPaths) {
         return propPaths.reduce((hash, [keyPath, valuePath]) => {
-            let key = getMessageDescriptorKey(keyPath);
+            const key = getMessageDescriptorKey(keyPath);
 
             if (DESCRIPTOR_PROPS.has(key)) {
                 hash[key] = valuePath;
@@ -92,9 +100,13 @@ export default function () {
         }, {});
     }
 
+    // Given a descriptor, parse its values.
+    // `defaultMessage` needs to be parsed as an ICU message.
+    // Other props just need to be trimmed.
+    // In both cases, the value must be statically evaluatable.
     function evaluateMessageDescriptor({...descriptor}, {isJSXSource = false} = {}) {
         Object.keys(descriptor).forEach((key) => {
-            let valuePath = descriptor[key];
+            const valuePath = descriptor[key];
 
             if (key === 'defaultMessage') {
                 descriptor[key] = getICUMessageValue(valuePath, {isJSXSource});
@@ -116,7 +128,7 @@ export default function () {
         }
 
         if (reactIntl.messages.has(id)) {
-            let existing = reactIntl.messages.get(id);
+            const existing = reactIntl.messages.get(id);
 
             if (description !== existing.description ||
                 defaultMessage !== existing.defaultMessage) {
@@ -243,10 +255,19 @@ export default function () {
                     }
                 }
 
+                function assertStringLiteral(node) {
+                    if (!(node && node.isStringLiteral())) {
+                        throw path.buildCodeFrameError(
+                            `[React Intl] \`${callee.node.name}()\` must be ` +
+                            'called with an string literal.'
+                        );
+                    }
+                }
+
                 function processMessageObject(messageObj) {
                     assertObjectExpression(messageObj);
 
-                    let properties = messageObj.get('properties');
+                    const properties = messageObj.get('properties');
 
                     let descriptor = createMessageDescriptor(
                         properties.map((prop) => [
@@ -260,14 +281,29 @@ export default function () {
                     storeMessage(descriptor, path, state);
                 }
 
+                // defineMessages(messageDescriptor)
                 if (referencesImport(callee, moduleSourceName, FUNCTION_NAMES)) {
-                    let messagesObj = path.get('arguments')[0];
+                    const messagesObj = path.get('arguments')[0];
 
                     assertObjectExpression(messagesObj);
 
                     messagesObj.get('properties')
                         .map((prop) => prop.get('value'))
                         .forEach(processMessageObject);
+                }
+                // __('Message')
+                else if (referencesImport(callee, moduleSourceName, BARE_FUNCTION_NAMES)) {
+                    const message = path.get('arguments')[0];
+
+                    assertStringLiteral(message);
+
+                    // Evaluate
+                    const value = getICUMessageValue(message);
+                    const relativePath = p.relative(process.cwd(), state.file.opts.filename);
+                    const description = 'Shorthand Message in File: ' + relativePath;
+                    const id = value;
+                    const descriptor = {id, description, defaultMessage: value};
+                    storeMessage(descriptor, path, state);
                 }
             },
         },
